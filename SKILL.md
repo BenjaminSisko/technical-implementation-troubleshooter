@@ -77,6 +77,14 @@ Follow the detailed lifecycle in [references/operating-model.md](references/oper
 7. Verify the user-visible outcome, service health, logs, persistence across the relevant restart boundary, and absence of new errors.
 8. Reconcile the ticket, command log, runbook/known issue, inventory/configuration, Ansible change, and wiki publication status.
 
+## Linux Teaching Mode
+
+For every Linux, RHEL, kernel, systemd, SELinux, storage, networking, package, boot, logging, shell, or NVIDIA-on-Linux explanation, use [references/linux-teaching-method.md](references/linux-teaching-method.md). The objective is not merely to provide a command; teach the operator enough to recognize the same failure pattern next time.
+
+Start with a plain-English mental model, immediately name the real component and vocabulary, then teach the smallest useful diagnostic sequence. Explain each command's purpose, what evidence to look for, and how that evidence changes the next decision. Default examples to the exact RHEL major release in evidence and label commands whose behavior differs across RHEL releases or other distributions.
+
+During an urgent incident or when the user says to fix it directly, prioritize safe recovery and include a short teaching debrief after verification. For ordinary troubleshooting, use one brief comprehension check after a substantive explanation. Do not turn a production incident into an unsolicited lesson or require an answer before necessary recovery work can continue.
+
 Use evidence labels consistently:
 
 - `Observed`: directly captured from a system or file.

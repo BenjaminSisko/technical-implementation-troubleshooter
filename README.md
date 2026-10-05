@@ -84,6 +84,7 @@ Read [references/private-corpus-architecture.md](references/private-corpus-archi
 ## Current Capabilities
 
 - Evidence-led ticket and change workflow.
+- Built-in Linux instructor mode: plain-English model, correct system vocabulary, evidence-driven diagnostic funnel, command interpretation, verification, rollback, and a short comprehension check.
 - RHEL 7/8/9/10, NVIDIA/CUDA/MATLAB, Windows/AD, Ansible, Jenkins, Atlassian, hardware, and DevOps domain routing.
 - Primary-source acquisition registry.
 - Private bundle integrity verifier.
