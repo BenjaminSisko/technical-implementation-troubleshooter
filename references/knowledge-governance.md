@@ -14,6 +14,22 @@ Use a promotion pipeline:
 
 Do not move directly from Captured to Promoted.
 
+After a case reaches Verified, the harness may generate a review artifact without copying the full ticket:
+
+```bash
+python3 "$SKILL_ROOT/scripts/create_knowledge_candidate.py" \
+  --case-record /approved/repo/tickets/CASE.md \
+  --output /approved/repo/knowledge-candidates/example.md \
+  --title 'Version-bounded issue title' \
+  --applicability 'Exact product, OS, kernel, and hardware boundary' \
+  --resolution 'Verified correction' \
+  --verification 'Evidence proving the success condition' \
+  --rollback 'Tested rollback or recovery action' \
+  --evidence 'root:path@locator#chunk-N'
+```
+
+The generated record is always `candidate`. Repository review promotes it, after which the private index is rebuilt and representative behavioral searches are rerun. This is governed continuous learning; conversation history alone never changes active guidance.
+
 ## Promotion Criteria
 
 A reusable entry should state:
@@ -37,7 +53,7 @@ When new evidence contradicts existing guidance:
 2. Mark the conflict and identify both sources and versions.
 3. Test the smallest safe discriminating case.
 4. Update the canonical record and mark old guidance superseded.
-5. Rebuild the local knowledge catalog.
+5. Rebuild the local knowledge catalog and private search index, then rerun the affected evaluation cases.
 
 ## Knowledge Hygiene
 

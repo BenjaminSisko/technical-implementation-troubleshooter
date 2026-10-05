@@ -12,6 +12,11 @@ Clone the repository directly into the Codex skill directory:
 git clone https://github.com/BenjaminSisko/technical-implementation-troubleshooter.git \
   ~/.codex/skills/technical-implementation-troubleshooter
 cd ~/.codex/skills/technical-implementation-troubleshooter
+
+export TECH_TROUBLESHOOTER_SKILL_ROOT="$HOME/.codex/skills/technical-implementation-troubleshooter"
+
+python3 scripts/install_harness_links.py --dry-run
+python3 scripts/install_harness_links.py
 ```
 
 For the simplest setup, copy the private knowledge files into the ignored `private-corpus/` directory and activate them:
@@ -19,10 +24,12 @@ For the simplest setup, copy the private knowledge files into the ignored `priva
 ```bash
 mkdir -p private-corpus
 cp -a /path/to/your/knowledge-corpus/. private-corpus/
-python3 scripts/configure_skill.py
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/configure_skill.py" --dry-run
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/configure_skill.py"
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/doctor.py"
 ```
 
-That one command lets the skill configure itself. It:
+The configuration command lets the skill configure itself. It:
 
 1. reads the local corpus without adding it to Git;
 2. builds a private SQLite full-text index;
@@ -32,12 +39,12 @@ That one command lets the skill configure itself. It:
 Confirm that retrieval works:
 
 ```bash
-python3 scripts/search_private_corpus.py \
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/search_private_corpus.py" \
   --index ~/.local/share/technical-implementation-troubleshooter/search.sqlite \
   --query 'RHEL NVIDIA Secure Boot'
 ```
 
-Restart or reload the agent so it discovers the skill, then use a prompt such as:
+`doctor.py` must report `status=READY`. Restart or reload Codex and Claude Code so they discover the shared checkout, then use a prompt such as:
 
 ```text
 Use $technical-implementation-troubleshooter to investigate this issue. Search the configured private corpus and cite the sources you use.
@@ -50,13 +57,25 @@ The corpus may contain Markdown, text, HTML, JSON, YAML, shell, Python, PowerShe
 Point at existing directories instead of copying them into the skill:
 
 ```bash
-python3 scripts/configure_skill.py \
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/configure_skill.py" \
   --root vendor=/srv/knowledge/vendor \
   --root environment=/srv/knowledge/technical-implementation \
   --root ansible=/srv/knowledge/ansible
 ```
 
 Root labels become part of every search citation. Re-run the same command after replacing or adding source files; the index is rebuilt atomically.
+
+The generated configuration preserves each label with its path, so a later rebuild does not turn stable citations such as `nvidia:...` into generic `corpus-2:...` citations.
+
+To activate a verified drop-in bundle that already contains a search index:
+
+```bash
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/configure_skill.py" \
+  --bundle /srv/troubleshooter/bundles/site-corpus-YYYY-MM-DD
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/doctor.py"
+```
+
+Name the packaged index `search.sqlite` or `indexes/search.sqlite`. One differently named `.sqlite` is accepted when it is the only candidate; multiple unnamed indexes are rejected so the tool never guesses between an active and rollback artifact.
 
 ### Air-Gapped Transfer
 
@@ -90,6 +109,11 @@ Read [references/private-corpus-architecture.md](references/private-corpus-archi
 - Private bundle integrity verifier.
 - Metadata catalog builder.
 - Full-text SQLite FTS5 index builder that stores relative citations and hashes instead of source-root paths.
+- Structured vendor/product/version/platform/OS/kernel/hardware/status/classification metadata and filters.
+- Offline PDF and Office-to-text extraction with hash-bearing receipts and page/slide/sheet anchors.
+- Self-diagnostic command with explicit readiness states.
+- Shared-checkout installation for Codex and Claude Code.
+- Automated Python 3.9/3.11/3.13 integration tests.
 - Offline search client.
 - Separate private environment overlays.
 
@@ -100,47 +124,68 @@ The activation helper handles the minimum local configuration. Edit the generate
 Those repositories can also be configured without hand-editing JSON:
 
 ```bash
-python3 scripts/configure_skill.py --skip-index \
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/configure_skill.py" --skip-index \
   --technical-implementation-repo /srv/repos/technical-implementation \
   --ansible-repo /srv/repos/ansible \
   --md-code-red-repo /srv/repos/md-code-red \
   --md-code-red-ref refs/tags/v1.0.0
 
-python3 scripts/configure_skill.py --check-only
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/doctor.py"
 ```
 
-The helper also consumes `TECH_IMPL_REPO`, `INFRA_ANSIBLE_REPO`, `VENDOR_REFERENCE_REPO`, `TECH_IMPL_WIKI_REPO`, `MD_CODE_RED_REPO`, `MD_CODE_RED_REF`, and `PRIVATE_CORPUS_ROOTS` when they are already defined. It never searches the full home directory or filesystem for likely repositories.
+The helper also consumes `TECH_IMPL_REPO`, `INFRA_ANSIBLE_REPO`, `VENDOR_REFERENCE_REPO`, `TECH_IMPL_WIKI_REPO`, `MD_CODE_RED_REPO`, `MD_CODE_RED_REF`, `PRIVATE_CORPUS_ROOTS`, and `PRIVATE_CORPUS_BUNDLES` when they are already defined. It never searches the full home directory or filesystem for likely repositories.
 
 Do not place credentials, vendor license keys, or source-document content in the configuration file.
+
+## Runtime and Harness Requirements
+
+- Python 3.9 or newer on the approved administration/AI-harness system.
+- Python SQLite with FTS5 enabled.
+- `pdftotext` only when extracting PDFs.
+- `gpgv` when verifying a signed private vendor bundle.
+
+The scripts do not need to run on every RHEL target. Keep production hosts minimal and operate the corpus from an approved management workstation. Read [references/runtime-and-harnesses.md](references/runtime-and-harnesses.md).
 
 ## Build a Private Search Index
 
 The five-minute setup above is the recommended path. The lower-level builder remains available when you need exact output locations or bundle metadata:
 
 ```bash
-python3 scripts/build_private_search_index.py \
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/build_private_search_index.py" \
   --root redhat=/private/corpus/redhat \
   --root ansible=/private/corpus/ansible \
   --root environment=/private/technical-implementation \
   --bundle-id site-corpus-YYYY-MM-DD \
   --classification private \
+  --report /private/bundles/site-corpus-YYYY-MM-DD/indexes/search.sqlite.report.json \
   --output /private/bundles/site-corpus-YYYY-MM-DD/indexes/search.sqlite
 ```
 
 Search it:
 
 ```bash
-python3 scripts/search_private_corpus.py \
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/search_private_corpus.py" \
   --index /private/bundles/site-corpus-YYYY-MM-DD/indexes/search.sqlite \
   --query 'RHEL 9 Secure Boot kernel module signing'
 ```
 
 The index is generated data. Preserve the original source files and manifests.
 
+Add `--document-manifest LABEL=PATH` to ingest structured vendor, product, version, platform, OS, kernel, hardware, status, classification, source-date, and supersession metadata. Search supports corresponding filters and reports whether an all-term query or any-term fallback produced the results. See [references/metadata-and-search.md](references/metadata-and-search.md).
+
+Extract PDF or Office material before indexing:
+
+```bash
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/extract_document.py" \
+  --input /private/quarantine/vendor-guide.pdf \
+  --output /private/corpus/nvidia/vendor-guide.txt
+```
+
 ## Validate the Source Registry
 
 ```bash
-python3 scripts/validate_source_registry.py references/source-registry.json
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/validate_source_registry.py" \
+  "$TECH_TROUBLESHOOTER_SKILL_ROOT/references/source-registry.json"
 ```
 
 The registry is a source/acquisition map. It does not claim that every listed source has already been downloaded or reviewed. Generate actual coverage from the private bundle manifest.
@@ -148,8 +193,8 @@ The registry is a source/acquisition map. It does not claim that every listed so
 Acquire selected anonymous public sources into a private, content-addressed cache:
 
 ```bash
-python3 scripts/acquire_public_sources.py \
-  --registry references/source-registry.json \
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/acquire_public_sources.py" \
+  --registry "$TECH_TROUBLESHOOTER_SKILL_ROOT/references/source-registry.json" \
   --output /private/vendor-sources \
   --source-id nvidia-kernel-modules \
   --source-id nvidia-rhel-install \
@@ -157,6 +202,32 @@ python3 scripts/acquire_public_sources.py \
 ```
 
 The collector intentionally refuses account-required, subscription-entitled, developer-login-required, package-repository-sync, and manual-media sources. An authorized user must obtain those through the vendor-supported process and import them privately.
+
+## Verify a Private Bundle
+
+Activation requires a detached manifest signature and a trusted public-key keyring:
+
+```bash
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/verify_vendor_bundle.py" \
+  --bundle /private/bundles/vendor-YYYY-MM-DD \
+  --manifest /private/bundles/vendor-YYYY-MM-DD/manifest.json \
+  --signature /private/bundles/vendor-YYYY-MM-DD/manifest.json.asc \
+  --keyring /private/trust/vendor-bundle-signers.gpg \
+  --strict-unlisted
+```
+
+`--allow-unsigned` is an explicit development/personal exception; it must not be used for a production activation that requires publisher authentication. A checksum proves integrity against a recorded value. The verified signature binds the manifest to a trusted signing key.
+
+## Tests
+
+```bash
+python3 -m py_compile scripts/*.py tests/*.py
+python3 -m unittest discover -s tests -v
+python3 scripts/validate_source_registry.py references/source-registry.json
+python3 scripts/check_public_tree.py
+```
+
+GitHub Actions runs the suite on Python 3.9, 3.11, and 3.13 and rejects private/generated payload types in the tracked tree.
 
 ## Safety Boundary
 
@@ -169,5 +240,7 @@ The collector intentionally refuses account-required, subscription-entitled, dev
 ## GitHub
 
 Before publication, review the complete tree, generated outputs, releases, and Git history for operational information as well as secrets. A conventional secret scan does not detect every hostname, address, username, ticket, topology detail, or package inventory.
+
+Release and air-gap verification requirements are in [references/release-integrity.md](references/release-integrity.md).
 
 `private-corpus/`, local configuration, generated SQLite indexes, package files, archives, keys, host captures, and support bundles are ignored by Git. Treat `.gitignore` as a safety net, not as permission to run `git add -f`.

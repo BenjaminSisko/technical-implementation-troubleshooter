@@ -76,7 +76,7 @@ On the offline side:
 
 1. Follow the approved media-ingress process.
 2. Verify the bundle signature/attestation when the publishing process provides one, then verify the SHA-256 manifest before activation. Do not describe a bare checksum as publisher authentication.
-3. Run `scripts/verify_vendor_bundle.py`.
+3. Run `scripts/verify_vendor_bundle.py` with the detached manifest signature and trusted public-key keyring. Production activation requires successful signature verification; `--allow-unsigned` is an explicit development/personal exception, not an authentication substitute.
 4. Import into a new immutable/versioned bundle directory.
 5. Change the `active` pointer only after review.
 6. Retain or archive the prior bundle according to records policy.

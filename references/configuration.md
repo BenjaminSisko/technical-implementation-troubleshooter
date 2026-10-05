@@ -22,13 +22,13 @@ Do not broadly scan a home directory, mount tree, or filesystem to guess a produ
 The supported one-command setup is:
 
 ```bash
-python3 scripts/configure_skill.py
+python3 "$SKILL_ROOT/scripts/configure_skill.py"
 ```
 
-With no arguments, the helper indexes the skill's Git-ignored `private-corpus/` directory using the root label `local-corpus`. To leave source files in an existing approved location, repeat `--root LABEL=PATH`:
+With no arguments, the helper reuses existing labeled configuration roots; on first use it indexes the skill's Git-ignored `private-corpus/` directory using the root label `local-corpus`. To leave source files in an existing approved location, repeat `--root LABEL=PATH`:
 
 ```bash
-python3 scripts/configure_skill.py \
+python3 "$SKILL_ROOT/scripts/configure_skill.py" \
   --root vendor=/approved/corpus/vendor \
   --root environment=/approved/corpus/environment
 ```
@@ -40,7 +40,17 @@ Unless overridden, the helper writes:
 
 It preserves unrelated keys in an existing configuration and replaces only `private_reference_roots` and `private_search_indexes`. The update is atomic. Use `--dry-run` to print the planned roots and paths without building or writing anything.
 
-The helper can configure the named repositories with `--technical-implementation-repo`, `--ansible-repo`, `--vendor-reference-repo`, `--wiki-repo`, `--md-code-red-repo`, and `--md-code-red-ref`. It uses the corresponding environment variables when a flag is absent. Use `--skip-index` to update repository settings without rebuilding the corpus and `--check-only` to verify configured directories and SQLite integrity.
+The helper stores labeled root objects so citations remain stable across rebuilds. It can activate immutable bundle roots with repeated `--bundle` arguments and the named repositories with `--technical-implementation-repo`, `--ansible-repo`, `--vendor-reference-repo`, `--wiki-repo`, `--md-code-red-repo`, and `--md-code-red-ref`. It uses the corresponding environment variables when a flag is absent. Use `--skip-index` to update repository settings without rebuilding a source corpus.
+
+A drop-in bundle may provide its ready-to-search schema-1 or schema-2 index as either `search.sqlite` or `indexes/search.sqlite`. If neither conventional name exists, one other `.sqlite` file at the bundle root or directly under `indexes/` is accepted. Multiple unnamed candidates are rejected rather than guessing which rollback or active index to use. A packaged index is validated for expected tables, non-empty content, supported schema, and SQLite integrity before the configuration becomes ready.
+
+Use the full readiness check after configuration:
+
+```bash
+python3 "$SKILL_ROOT/scripts/doctor.py"
+```
+
+The doctor validates Python, SQLite FTS5, configuration existence and permissions, labeled roots, index schema, non-empty document/chunk tables, and SQLite integrity. A missing configuration is `UNCONFIGURED`/`NOT_READY`, not success.
 
 ## Optional Configuration File
 
@@ -48,7 +58,7 @@ The configuration file contains paths and non-secret policy selectors only:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "technical_implementation_repo": "/absolute/path/to/Technical Implementation",
   "ansible_repo": "/absolute/path/to/ansible-repository",
   "vendor_reference_repo": "/absolute/path/to/vendor-reference-repository",
@@ -56,8 +66,14 @@ The configuration file contains paths and non-secret policy selectors only:
   "md_code_red_repo": "/absolute/path/to/md-code-red",
   "md_code_red_ref": "refs/remotes/origin/main",
   "private_reference_roots": [
-    "/absolute/private/path/environment-overlay",
-    "/absolute/private/path/vendor-extracts"
+    {
+      "label": "environment",
+      "path": "/absolute/private/path/environment-overlay"
+    },
+    {
+      "label": "vendor",
+      "path": "/absolute/private/path/vendor-extracts"
+    }
   ],
   "private_corpus_bundles": [
     "/absolute/private/path/bundles/2026-10-04"
@@ -89,7 +105,7 @@ Do not scan every configured private root automatically for every ticket. Select
 
 After resolving a root, use `rg --files` and targeted `rg` searches to locate:
 
-- `AGENTS.md` and nested instruction files;
+- `AGENTS.md`, `CLAUDE.md`, and nested instruction files;
 - ticket and troubleshooting templates;
 - runbook indexes;
 - working agreements and contribution rules;

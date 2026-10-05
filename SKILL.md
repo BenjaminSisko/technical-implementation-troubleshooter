@@ -9,6 +9,8 @@ Resolve incidents safely and leave the environment's technical record more accur
 
 This skill is an operating method and retrieval router, not a substitute for the repositories it uses. Treat the configured Technical Implementation repository as the canonical case/runbook record, the configured Ansible repository as the canonical automation record, approved private vendor bundles as the offline vendor evidence, and MD CODE RED as a governed RHEL/Ansible evidence corpus rather than as production desired state.
 
+Resolve `SKILL_ROOT` as the directory containing this loaded `SKILL.md`. Execute bundled helpers as `python3 "$SKILL_ROOT/scripts/<name>.py"`; never assume the harness working directory is the skill directory. Read [references/runtime-and-harnesses.md](references/runtime-and-harnesses.md) when installing, diagnosing discovery, or using Codex and Claude Code together.
+
 Read [references/private-corpus-architecture.md](references/private-corpus-architecture.md) before adding or exporting knowledge. A public copy of this skill may contain portable instructions, schemas, source registries, and tools. Full vendor documents acquired through authorized access, environment evidence, tickets, topology, and generated search indexes belong in the private/offline corpus. Private does not mean unusable: the private corpus is the intended source for full-text retrieval.
 
 ## Resolve the Knowledge Roots
@@ -21,21 +23,21 @@ Resolve `private_reference_roots` and `private_corpus_bundles` as well as the na
 
 On first use, check `~/.config/technical-implementation-troubleshooter/config.json`. If it is absent, incomplete, or stale, configure the skill from exact paths supplied by the user, trusted task context, the documented environment variables, or the Git-ignored `private-corpus/` folder. Never search broadly for plausible repositories.
 
-Prefer `python3 scripts/configure_skill.py`. With no arguments it indexes the local `private-corpus/` folder; with repeated `--root LABEL=PATH` arguments it indexes existing external corpus directories. Repository flags connect Technical Implementation, Ansible, vendor reference, wiki, and MD CODE RED checkouts. The helper preserves unrelated configuration keys, writes atomically, validates paths and SQLite integrity, and keeps configuration and indexes outside version control.
+Prefer `python3 "$SKILL_ROOT/scripts/configure_skill.py"`. With no arguments it reuses configured labeled roots, or indexes the local `private-corpus/` folder on first use; with repeated `--root LABEL=PATH` arguments it indexes existing external corpus directories. Repository and bundle flags connect Technical Implementation, Ansible, vendor reference, wiki, MD CODE RED, and immutable private bundle roots. The helper preserves unrelated configuration keys, writes atomically, retains root labels, validates expected index schema and SQLite integrity, and keeps configuration and indexes outside version control.
 
 When the user asks to install, configure, or activate the skill and the trusted paths are known:
 
-1. run `python3 scripts/configure_skill.py --dry-run` with the intended arguments;
+1. run `python3 "$SKILL_ROOT/scripts/configure_skill.py" --dry-run` with the intended arguments;
 2. review the resolved roots and output locations for accidental private or incorrect paths;
 3. run the same command without `--dry-run`;
-4. run `python3 scripts/configure_skill.py --check-only`;
+4. run `python3 "$SKILL_ROOT/scripts/doctor.py"` and require `status=READY`;
 5. perform one representative search and confirm that citations use the expected root labels and relative paths.
 
 If a required path remains unknown, configure the known portions with `--skip-index` when useful and report the missing field as `Needs Validation`. Do not invent it. Read [references/configuration.md](references/configuration.md) for exact locations, accepted environment variables, and manual alternatives.
 
 For every resolved repository or bundle:
 
-1. Read its `AGENTS.md`, contributing guide, working agreement, templates, indexes, and local instructions before editing.
+1. Read its applicable `AGENTS.md`, `CLAUDE.md`, contributing guide, working agreement, templates, indexes, and local instructions before editing.
 2. Inspect `git status --short` and preserve unrelated work.
 3. Identify the repository's required branch, ticket identifier, commit, review, and wiki-publication workflow.
 4. Search existing tickets, runbooks, decisions, playbooks, and vendor references before proposing a cause or asking the user to repeat known facts.
@@ -55,6 +57,8 @@ Use this order when sources disagree:
 7. Model knowledge, used only as a hypothesis and explicitly labeled when it is not locally verified.
 
 Never replace a version-specific fact with a generic recollection. Record contradictions instead of silently choosing one.
+
+When a configured private search index covers the ticket's domain, run at least one targeted search before relying on model knowledge. Select relevant root and metadata filters, inspect the cited original document, and check version/applicability before recommending a command. If retrieval returns no applicable source, record the query and label the source gap `Needs Validation`; do not silently answer from memory as though it were locally verified. Read [references/metadata-and-search.md](references/metadata-and-search.md) for filters, fallback behavior, citations, and ingestion metadata.
 
 ## Choose the Working Mode
 
@@ -134,6 +138,7 @@ Key constraints:
 - Keep one canonical fact. Link to it rather than copying it across the ticket, runbook, wiki, and playbook comments.
 - Record the versions and conditions under which a fix was verified.
 - Reopen or mark `Needs Validation` when later evidence contradicts the promoted guidance.
+- For a verified case, `python3 "$SKILL_ROOT/scripts/create_knowledge_candidate.py"` may create a reviewable `candidate` record. It never activates guidance; review and repository workflow remain required.
 
 ## Wiki and Ansible Integration
 
@@ -149,7 +154,7 @@ Read [references/wiki-and-ansible.md](references/wiki-and-ansible.md) before cro
 The metadata catalog is useful for inventory, but it is not full-text retrieval. Build it without publishing absolute-path output:
 
 ```bash
-python3 scripts/build_knowledge_catalog.py \
+python3 "$SKILL_ROOT/scripts/build_knowledge_catalog.py" \
   --root technical="$TECH_IMPL_REPO" \
   --root ansible="$INFRA_ANSIBLE_REPO" \
   --root code-red="$MD_CODE_RED_REPO" \
@@ -162,13 +167,13 @@ The catalog excludes likely secret material and stores paths, titles, timestamps
 Build the private full-text SQLite index from already reviewed corpus roots:
 
 ```bash
-python3 scripts/build_private_search_index.py \
+python3 "$SKILL_ROOT/scripts/build_private_search_index.py" \
   --root redhat=/approved/private/redhat \
   --root nvidia=/approved/private/nvidia \
   --root environment=/approved/private/environment \
   --output /approved/private/bundle/indexes/search.sqlite
 
-python3 scripts/search_private_corpus.py \
+python3 "$SKILL_ROOT/scripts/search_private_corpus.py" \
   --index /approved/private/bundle/indexes/search.sqlite \
   --query 'RHEL 9 NVIDIA open DKMS Secure Boot'
 ```
@@ -178,9 +183,11 @@ Search results must return a root label, relative path, content hash, and chunk 
 Before using an imported vendor bundle, verify it:
 
 ```bash
-python3 scripts/verify_vendor_bundle.py \
+python3 "$SKILL_ROOT/scripts/verify_vendor_bundle.py" \
   --bundle /approved/path/vendor-bundle \
   --manifest /approved/path/vendor-bundle/manifest.json \
+  --signature /approved/path/vendor-bundle/manifest.json.asc \
+  --keyring /approved/path/trustedkeys.gpg \
   --strict-unlisted
 ```
 

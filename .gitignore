@@ -3,6 +3,7 @@ __pycache__/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+*.sqlite.report.json
 *.db
 *.rpm
 *.iso
@@ -27,3 +28,4 @@ vendor-bundles/
 support-bundles/
 host-captures/
 license.dat
+*.receipt.json

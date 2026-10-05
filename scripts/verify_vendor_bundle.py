@@ -7,8 +7,11 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path, PurePosixPath
+from typing import Optional
 from urllib.parse import urlparse
 
 
@@ -22,6 +25,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--bundle", required=True, type=Path, help="Bundle root directory.")
     parser.add_argument("--manifest", required=True, type=Path, help="Manifest JSON path.")
+    parser.add_argument("--signature", type=Path, help="Detached OpenPGP manifest signature.")
+    parser.add_argument("--keyring", type=Path, help="Trusted public-key keyring for gpgv.")
+    parser.add_argument(
+        "--allow-unsigned",
+        action="store_true",
+        help="Explicitly permit an unsigned development/personal bundle.",
+    )
     parser.add_argument(
         "--strict-unlisted",
         action="store_true",
@@ -38,7 +48,7 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def safe_relative_path(value: object) -> PurePosixPath | None:
+def safe_relative_path(value: object) -> Optional[PurePosixPath]:
     if not isinstance(value, str) or not value or "\\" in value:
         return None
     relative = PurePosixPath(value)
@@ -67,6 +77,43 @@ def main() -> int:
     if not manifest_path.is_file():
         print(f"error: manifest is not a file: {manifest_path}", file=sys.stderr)
         return 2
+
+    signature_verified = False
+    signature_path = args.signature.expanduser().resolve() if args.signature else None
+    keyring_path = args.keyring.expanduser().resolve() if args.keyring else None
+    if args.allow_unsigned:
+        if signature_path or keyring_path:
+            errors.append("--allow-unsigned cannot be combined with --signature or --keyring")
+    else:
+        if signature_path is None or keyring_path is None:
+            errors.append(
+                "a detached manifest --signature and trusted --keyring are required; "
+                "use --allow-unsigned only for an explicitly accepted unsigned bundle"
+            )
+        elif not signature_path.is_file():
+            errors.append(f"signature is not a file: {signature_path}")
+        elif not keyring_path.is_file():
+            errors.append(f"keyring is not a file: {keyring_path}")
+        elif shutil.which("gpgv") is None:
+            errors.append("gpgv is required for detached-signature verification")
+        else:
+            completed = subprocess.run(
+                [
+                    "gpgv",
+                    "--keyring",
+                    str(keyring_path),
+                    str(signature_path),
+                    str(manifest_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if completed.returncode != 0:
+                detail = completed.stderr.strip().splitlines()[-1] if completed.stderr.strip() else "unknown gpgv error"
+                errors.append(f"manifest signature verification failed: {detail}")
+            else:
+                signature_verified = True
 
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -147,6 +194,12 @@ def main() -> int:
         manifest_inside_bundle = manifest_path.relative_to(bundle).as_posix()
     except ValueError:
         pass
+    signature_inside_bundle = None
+    if signature_path is not None:
+        try:
+            signature_inside_bundle = signature_path.relative_to(bundle).as_posix()
+        except ValueError:
+            pass
 
     unlisted: list[str] = []
     for path in sorted(bundle.rglob("*")):
@@ -156,7 +209,7 @@ def main() -> int:
         if not path.is_file():
             continue
         relative_text = path.relative_to(bundle).as_posix()
-        if relative_text == manifest_inside_bundle:
+        if relative_text in {manifest_inside_bundle, signature_inside_bundle}:
             continue
         if relative_text not in listed_paths:
             unlisted.append(relative_text)
@@ -181,7 +234,9 @@ def main() -> int:
 
     print(
         f"verification passed: bundle={manifest.get('bundle_id')} "
-        f"documents={len(documents)} verified={verified} warnings={len(warnings)}"
+        f"documents={len(documents)} verified={verified} "
+        f"signature={'verified' if signature_verified else 'explicitly-unsigned'} "
+        f"warnings={len(warnings)}"
     )
     return 0
 
