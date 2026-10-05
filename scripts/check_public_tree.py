@@ -27,6 +27,12 @@ FORBIDDEN_SUFFIXES = {
     ".rpm",
     ".sqlite",
 }
+FORBIDDEN_NAME_SUFFIXES = {
+    ".approval.json",
+    ".documents.json",
+    ".sanitization.json",
+    ".sqlite.report.json",
+}
 OPERATIONAL_PATTERNS = {
     "macOS user path": re.compile(re.escape("/" + "Users/")),
     "macOS volume path": re.compile(re.escape("/" + "Volumes/")),
@@ -56,6 +62,8 @@ def main() -> int:
             findings.append(f"forbidden private directory: {relative}")
         if path.suffix.lower() in FORBIDDEN_SUFFIXES:
             findings.append(f"forbidden generated/private payload type: {relative}")
+        if any(path.name.endswith(suffix) for suffix in FORBIDDEN_NAME_SUFFIXES):
+            findings.append(f"forbidden private review artifact: {relative}")
         absolute = REPO / path
         if absolute.is_symlink():
             findings.append(f"tracked symbolic link requires publication review: {relative}")

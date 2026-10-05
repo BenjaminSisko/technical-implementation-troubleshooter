@@ -16,6 +16,8 @@ from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from typing import Optional
 
+from sensitive_content import detect_secret_types, has_high_confidence_secret
+
 
 INDEX_SCHEMA_VERSION = 2
 TEXT_SUFFIXES = {
@@ -84,17 +86,6 @@ SENSITIVE_PREFIXES = (
     "id_ed25519",
     "id_rsa",
     "secrets.",
-)
-HIGH_CONFIDENCE_SECRET_PATTERNS = (
-    re.compile(
-        rb"-----BEGIN (?:(?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY|PGP PRIVATE KEY BLOCK)-----"
-    ),
-    re.compile(rb"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
-    re.compile(rb"\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
-    re.compile(rb"\bglpat-[A-Za-z0-9_-]{20,}\b"),
-    re.compile(rb"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
-    re.compile(rb"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(rb"(?i)\bBearer\s+[A-Za-z0-9._~-]{24,}\b"),
 )
 LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
@@ -300,10 +291,6 @@ def is_sensitive_name(path: Path) -> bool:
     )
 
 
-def has_high_confidence_secret(raw: bytes) -> bool:
-    return any(pattern.search(raw) for pattern in HIGH_CONFIDENCE_SECRET_PATTERNS)
-
-
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -352,6 +339,7 @@ def iter_files(
     allow_sensitive_content: bool,
     skipped: dict[str, int],
     skip_examples: list[dict[str, str]],
+    quarantined: list[dict[str, object]],
 ):
     allowed = set(TEXT_SUFFIXES)
     if include_logs:
@@ -395,6 +383,23 @@ def iter_files(
                                 yield path, stat, raw
                                 continue
             skipped[reason] += 1
+            if reason in {"sensitive_name", "sensitive_content"}:
+                quarantine_record: dict[str, object] = {
+                    "root_label": label,
+                    "path": path.relative_to(root).as_posix(),
+                    "reason": reason,
+                }
+                try:
+                    quarantine_raw = path.read_bytes()
+                except OSError:
+                    quarantine_record["inspection"] = "unreadable"
+                else:
+                    quarantine_record["size_bytes"] = len(quarantine_raw)
+                    quarantine_record["sha256"] = sha256_bytes(quarantine_raw)
+                    detectors = detect_secret_types(quarantine_raw)
+                    if detectors:
+                        quarantine_record["detectors"] = detectors
+                quarantined.append(quarantine_record)
             if sum(1 for item in skip_examples if item["reason"] == reason) < 20:
                 skip_examples.append(
                     {
@@ -628,6 +633,7 @@ def main() -> int:
         "empty": 0,
     }
     skip_examples: list[dict[str, str]] = []
+    quarantined: list[dict[str, object]] = []
     document_count = 0
     chunk_count = 0
     document_count_by_root = {label: 0 for label in labels}
@@ -660,6 +666,7 @@ def main() -> int:
                 args.allow_sensitive_content,
                 skipped,
                 skip_examples,
+                quarantined,
             ):
                 text = extract_text(path, raw)
                 chunks = chunk_text(text, args.chunk_chars)
@@ -779,7 +786,7 @@ def main() -> int:
         os.chmod(temporary, 0o600)
         temporary.replace(output)
         report = {
-            "schema_version": 1,
+            "schema_version": 2,
             "bundle_id": args.bundle_id,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "index_schema_version": INDEX_SCHEMA_VERSION,
@@ -788,6 +795,8 @@ def main() -> int:
             "chunk_count": chunk_count,
             "skipped": skipped,
             "skip_examples": skip_examples,
+            "quarantined": quarantined,
+            "quarantined_count": len(quarantined),
             "unmatched_manifest_documents": unmatched_metadata,
             "absolute_paths_stored": False,
         }

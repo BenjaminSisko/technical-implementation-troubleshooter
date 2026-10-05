@@ -19,6 +19,12 @@
   "private_corpus_bundles": [
     "/absolute/private/path/bundles/YYYY-MM-DD"
   ],
+  "private_document_manifests": [
+    {
+      "label": "vendor",
+      "path": "/absolute/private/path/manifests/vendor-documents.json"
+    }
+  ],
   "private_search_indexes": [
     "/absolute/private/path/bundles/YYYY-MM-DD/indexes/search.sqlite"
   ],

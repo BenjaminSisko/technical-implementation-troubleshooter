@@ -65,6 +65,27 @@ python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/configure_skill.py" \
 
 Root labels become part of every search citation. Re-run the same command after replacing or adding source files; the index is rebuilt atomically.
 
+If a reviewed vendor guide contains a private-key or token-shaped example, do
+not use the global sensitive-content bypass merely to index the rest of the
+guide. Create a hash-pinned sanitized derivative first:
+
+```bash
+python3 "$TECH_TROUBLESHOOTER_SKILL_ROOT/scripts/sanitize_reviewed_documents.py" \
+  --root /srv/knowledge/reviewed-source \
+  --approval-manifest /srv/knowledge/manifests/redaction-approval.json \
+  --output /srv/knowledge/sanitized/vendor-guides-YYYY-MM-DD \
+  --report /srv/knowledge/manifests/vendor-guides-YYYY-MM-DD.sanitization.json \
+  --document-manifest /srv/knowledge/manifests/vendor-guides-YYYY-MM-DD.documents.json \
+  --bundle-id vendor-guides-YYYY-MM-DD \
+  --dry-run
+```
+
+After reviewing the dry run, repeat it without `--dry-run`, then add the
+sanitized directory as a labeled root and pass the generated document manifest
+to `configure_skill.py`. The approval manifest, sanitized documents, receipts,
+and generated index are private corpus artifacts and must not be committed to
+this public repository.
+
 The generated configuration preserves each label with its path, so a later rebuild does not turn stable citations such as `nvidia:...` into generic `corpus-2:...` citations.
 
 To activate a verified drop-in bundle that already contains a search index:

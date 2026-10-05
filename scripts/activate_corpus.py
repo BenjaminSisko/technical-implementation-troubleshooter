@@ -150,6 +150,19 @@ def parse_root(value: str) -> tuple[str, Path]:
     return label, path
 
 
+def parse_document_manifest(value: str) -> tuple[str, Path]:
+    if "=" not in value:
+        raise ValueError(f"document manifest must use LABEL=PATH syntax: {value!r}")
+    label, raw_path = value.split("=", 1)
+    label = label.strip()
+    if not LABEL_RE.fullmatch(label):
+        raise ValueError(f"invalid document-manifest label: {label!r}")
+    path = Path(raw_path).expanduser().resolve()
+    if not path.is_file():
+        raise ValueError(f"document manifest is not a file: {path}")
+    return label, path
+
+
 def configured_root_specs(config: dict[str, object]) -> list[tuple[str, Path]]:
     raw_roots = config.get("private_reference_roots", [])
     if not isinstance(raw_roots, list):
@@ -177,6 +190,56 @@ def configured_root_specs(config: dict[str, object]) -> list[tuple[str, Path]]:
     if len(labels) != len(set(labels)):
         raise ValueError("configured private reference root labels must be unique")
     return roots
+
+
+def configured_document_manifests(
+    config: dict[str, object]
+) -> list[tuple[str, Path]]:
+    raw_manifests = config.get("private_document_manifests", [])
+    if not isinstance(raw_manifests, list):
+        raise ValueError("private_document_manifests must be a JSON list")
+    manifests: list[tuple[str, Path]] = []
+    for item in raw_manifests:
+        if not isinstance(item, dict):
+            raise ValueError("private_document_manifests entries must be objects")
+        label = item.get("label")
+        raw_path = item.get("path")
+        if not isinstance(label, str) or not isinstance(raw_path, str):
+            raise ValueError(
+                "private_document_manifests objects require string label and path fields"
+            )
+        if not LABEL_RE.fullmatch(label):
+            raise ValueError(f"invalid configured document-manifest label: {label!r}")
+        path = Path(raw_path).expanduser().resolve()
+        if not path.is_file():
+            raise ValueError(f"configured document manifest is missing: {path}")
+        manifests.append((label, path))
+    keys = [(label, str(path)) for label, path in manifests]
+    if len(keys) != len(set(keys)):
+        raise ValueError("configured document manifests must be unique")
+    return manifests
+
+
+def resolve_document_manifests(
+    values: Optional[list[str]],
+    config: dict[str, object],
+    *,
+    roots_were_explicit: bool,
+    root_labels: set[str],
+) -> list[tuple[str, Path]]:
+    if values:
+        manifests = [parse_document_manifest(value) for value in values]
+    elif roots_were_explicit:
+        manifests = []
+    else:
+        manifests = configured_document_manifests(config)
+    for label, _ in manifests:
+        if label not in root_labels:
+            raise ValueError(f"document manifest uses unknown root label: {label}")
+    keys = [(label, str(path)) for label, path in manifests]
+    if len(keys) != len(set(keys)):
+        raise ValueError("document manifests must be unique")
+    return manifests
 
 
 def resolve_roots(
@@ -404,6 +467,15 @@ def validate_config(
     raw_root_count = len(raw_roots) if isinstance(raw_roots, list) else 0
     if raw_root_count and len(roots) != raw_root_count:
         issues.append("one or more configured private reference roots are missing")
+    try:
+        manifests = configured_document_manifests(config)
+    except ValueError as exc:
+        issues.append(str(exc))
+        manifests = []
+    root_labels = {label for label, _ in roots}
+    for label, _ in manifests:
+        if label not in root_labels:
+            issues.append(f"document manifest uses unknown configured root label: {label}")
     raw_bundles = config.get("private_corpus_bundles", [])
     if not isinstance(raw_bundles, list):
         issues.append("private_corpus_bundles must be a JSON list")
@@ -458,6 +530,16 @@ def main() -> int:
         config, config_exists = load_config(config_path)
         apply_repository_settings(args, config)
         roots = [] if args.check_only else resolve_roots(args.root, config)
+        document_manifests = (
+            []
+            if args.check_only
+            else resolve_document_manifests(
+                args.document_manifest,
+                config,
+                roots_were_explicit=args.root is not None,
+                root_labels={label for label, _ in roots},
+            )
+        )
         bundles = [] if args.check_only else resolve_bundles(args.bundle, config)
         bundle_indexes = [] if args.check_only else discover_bundle_indexes(bundles)
     except ValueError as exc:
@@ -484,6 +566,8 @@ def main() -> int:
     print("Skill configuration plan")
     for label, path in roots:
         print(f"  root {label}={path}")
+    for label, path in document_manifests:
+        print(f"  document-manifest {label}={path}")
     for bundle in bundles:
         print(f"  bundle={bundle}")
     for bundle_index in bundle_indexes:
@@ -523,8 +607,8 @@ def main() -> int:
         ]
         for label, path in roots:
             command.extend(("--root", f"{label}={path}"))
-        for manifest in args.document_manifest or []:
-            command.extend(("--document-manifest", manifest))
+        for label, manifest_path in document_manifests:
+            command.extend(("--document-manifest", f"{label}={manifest_path}"))
         if args.include_logs:
             command.append("--include-logs")
         if args.allow_sensitive_content:
@@ -550,6 +634,10 @@ def main() -> int:
     if roots:
         config["private_reference_roots"] = [
             {"label": label, "path": str(path)} for label, path in roots
+        ]
+        config["private_document_manifests"] = [
+            {"label": label, "path": str(path)}
+            for label, path in document_manifests
         ]
     if bundles:
         config["private_corpus_bundles"] = [str(path) for path in bundles]

@@ -257,6 +257,207 @@ class ToolTests(unittest.TestCase):
                 },
                 payload["skip_examples"],
             )
+            self.assertEqual(payload["schema_version"], 2)
+            self.assertEqual(payload["quarantined_count"], 1)
+            quarantine = payload["quarantined"][0]
+            self.assertEqual(quarantine["reason"], "sensitive_content")
+            self.assertEqual(quarantine["detectors"], ["private_key_block"])
+            self.assertEqual(
+                quarantine["sha256"],
+                hashlib.sha256((root / "incident.md").read_bytes()).hexdigest(),
+            )
+            self.assertNotIn("not-a-real-key", report.read_text(encoding="utf-8"))
+
+    def test_reviewed_sanitization_is_hash_pinned_and_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            root = base / "source"
+            root.mkdir()
+            source = root / "vendor-guide.txt"
+            dash = chr(45)
+            private_key_begin = dash * 5 + "BEGIN PRIVATE KEY" + dash * 5
+            private_key_end = dash * 5 + "END PRIVATE KEY" + dash * 5
+            bearer_example = "Bearer " + "a" * 32
+            source.write_text(
+                "Certificate example\n"
+                f"{private_key_begin}\n"
+                "reviewed-example-only\n"
+                f"{private_key_end}\n"
+                f"API example: {bearer_example}\n"
+                "Keep this useful troubleshooting guidance.\n",
+                encoding="utf-8",
+            )
+            approval = base / "approval.json"
+            approval.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "documents": [
+                            {
+                                "path": "vendor-guide.txt",
+                                "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                                "approved_detectors": [
+                                    "private_key_block",
+                                    "bearer_token",
+                                ],
+                                "metadata": {
+                                    "vendor": "Example Vendor",
+                                    "status": "active",
+                                    "classification": "private",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            output = base / "sanitized"
+            report = base / "sanitization-report.json"
+            manifest = base / "document-manifest.json"
+            arguments = (
+                "--root",
+                root,
+                "--approval-manifest",
+                approval,
+                "--output",
+                output,
+                "--report",
+                report,
+                "--document-manifest",
+                manifest,
+                "--bundle-id",
+                "test-reviewed-redaction",
+            )
+            sanitized = run_script("sanitize_reviewed_documents.py", *arguments)
+            self.assertEqual(sanitized.returncode, 0, sanitized.stderr)
+            content = (output / source.name).read_text(encoding="utf-8")
+            self.assertIn("Keep this useful troubleshooting guidance.", content)
+            self.assertIn("REDACTED_REVIEWED_PRIVATE_KEY_EXAMPLE", content)
+            self.assertIn("REDACTED_REVIEWED_BEARER_TOKEN_EXAMPLE", content)
+            self.assertNotIn("reviewed-example-only", content)
+            self.assertNotIn("a" * 32, content)
+            receipt_text = report.read_text(encoding="utf-8")
+            self.assertNotIn("reviewed-example-only", receipt_text)
+            self.assertNotIn("a" * 32, receipt_text)
+            repeated = run_script("sanitize_reviewed_documents.py", *arguments)
+            self.assertEqual(repeated.returncode, 0, repeated.stderr)
+            self.assertIn("mode=verified-existing", repeated.stdout)
+            indexed = run_script(
+                "build_private_search_index.py",
+                "--root",
+                f"vendor={output}",
+                "--document-manifest",
+                f"vendor={manifest}",
+                "--output",
+                base / "search.sqlite",
+                "--report",
+                base / "search-report.json",
+            )
+            self.assertEqual(indexed.returncode, 0, indexed.stderr)
+            index_report = json.loads(
+                (base / "search-report.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(index_report["skipped"]["sensitive_content"], 0)
+
+    def test_reviewed_sanitization_rejects_changed_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            root = base / "source"
+            root.mkdir()
+            source = root / "guide.txt"
+            dash = chr(45)
+            private_key_begin = dash * 5 + "BEGIN PRIVATE KEY" + dash * 5
+            private_key_end = dash * 5 + "END PRIVATE KEY" + dash * 5
+            source.write_text(
+                f"{private_key_begin}\nexample\n{private_key_end}\n",
+                encoding="utf-8",
+            )
+            approval = base / "approval.json"
+            approval.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "documents": [
+                            {
+                                "path": "guide.txt",
+                                "sha256": "0" * 64,
+                                "approved_detectors": ["private_key_block"],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            rejected = run_script(
+                "sanitize_reviewed_documents.py",
+                "--root",
+                root,
+                "--approval-manifest",
+                approval,
+                "--output",
+                base / "sanitized",
+                "--report",
+                base / "report.json",
+                "--document-manifest",
+                base / "manifest.json",
+                "--bundle-id",
+                "changed-source",
+            )
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("source hash mismatch", rejected.stderr)
+            self.assertFalse((base / "sanitized").exists())
+
+    def test_configuration_reuses_document_manifests(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            root = base / "corpus"
+            root.mkdir()
+            document = root / "guide.md"
+            document.write_text("# Guide\n\nSearchable guidance", encoding="utf-8")
+            manifest = base / "manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "documents": [
+                            {
+                                "path": "guide.md",
+                                "sha256": hashlib.sha256(document.read_bytes()).hexdigest(),
+                                "vendor": "Example Vendor",
+                                "status": "active",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = base / "config.json"
+            index = base / "search.sqlite"
+            configured = run_script(
+                "configure_skill.py",
+                "--root",
+                f"vendor={root}",
+                "--document-manifest",
+                f"vendor={manifest}",
+                "--config",
+                config,
+                "--index",
+                index,
+            )
+            self.assertEqual(configured.returncode, 0, configured.stderr)
+            payload = json.loads(config.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["private_document_manifests"],
+                [{"label": "vendor", "path": str(manifest.resolve())}],
+            )
+            rebuilt = run_script(
+                "configure_skill.py", "--config", config, "--index", index
+            )
+            self.assertEqual(rebuilt.returncode, 0, rebuilt.stderr)
+            connection = sqlite3.connect(index)
+            vendor = connection.execute("SELECT vendor FROM documents").fetchone()[0]
+            connection.close()
+            self.assertEqual(vendor, "Example Vendor")
 
     def test_unsigned_bundle_requires_explicit_exception(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

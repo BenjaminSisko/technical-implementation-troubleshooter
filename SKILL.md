@@ -164,6 +164,15 @@ python3 "$SKILL_ROOT/scripts/build_knowledge_catalog.py" \
 
 The catalog excludes likely secret material and stores paths, titles, timestamps, sizes, and SHA-256 hashes—not document bodies. Keep the catalog private if it records environment filenames or layout.
 
+When an otherwise valuable vendor guide is quarantined because it contains an
+example private key or token, do not enable the global sensitive-content bypass.
+Review the source and use
+`scripts/sanitize_reviewed_documents.py` with a private, hash-pinned approval
+manifest. Index only the generated sanitized derivative and retain the receipt
+beside the private corpus. Read
+[references/metadata-and-search.md](references/metadata-and-search.md) for the
+redaction and verification workflow.
+
 Build the private full-text SQLite index from already reviewed corpus roots:
 
 ```bash

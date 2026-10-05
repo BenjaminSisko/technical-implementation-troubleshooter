@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/technical-implementation-troubleshooter/redaction-approval.schema.json",
+  "title": "Reviewed Corpus Redaction Approval",
+  "type": "object",
+  "required": ["schema_version", "documents"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "documents": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "approved_detectors"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "output_path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "approved_detectors": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "private_key_block",
+                "github_token",
+                "github_fine_grained_token",
+                "gitlab_token",
+                "slack_token",
+                "aws_access_key",
+                "bearer_token"
+              ]
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "architecture": { "type": "string" },
+              "classification": { "type": "string" },
+              "document_type": { "type": "string" },
+              "hardware_family": { "type": "string" },
+              "kernel_pattern": { "type": "string" },
+              "os_family": { "type": "string" },
+              "os_major": { "type": "string" },
+              "platform": { "type": "string" },
+              "product": { "type": "string" },
+              "published_at": { "type": "string" },
+              "retrieved_at": { "type": "string" },
+              "source_url": { "type": "string" },
+              "status": { "type": "string" },
+              "superseded_by": { "type": "string" },
+              "title": { "type": "string" },
+              "vendor": { "type": "string" },
+              "version": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

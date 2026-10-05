@@ -102,12 +102,15 @@ Index schema 2 implements per-document vendor, product, version, platform, OS, a
 2. Verify file type, archive safety, origin, checksum/signature, and source metadata.
 3. Store original bytes in the private raw layer.
 4. Parse to normalized text while preserving source anchors.
-5. Classify versions, applicability, handling, and confidence.
-6. Index as `candidate`.
-7. Review technical meaning, safety, and contradictions.
-8. Promote reviewed facts or procedures to `active`.
-9. Package a new immutable bundle with coverage report.
-10. Import and verify offline before switching the active pointer.
+5. If secret-pattern examples quarantine an otherwise useful document, review
+   the exact source hash and create a sanitized derivative with an auditable
+   redaction receipt; never overwrite the original.
+6. Classify versions, applicability, handling, and confidence.
+7. Index as `candidate`.
+8. Review technical meaning, safety, and contradictions.
+9. Promote reviewed facts or procedures to `active`.
+10. Package a new immutable bundle with coverage report.
+11. Import and verify offline before switching the active pointer.
 
 A scheduled collector may detect or download new candidates. It must not silently replace active troubleshooting guidance.
 

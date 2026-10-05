@@ -38,7 +38,16 @@ Unless overridden, the helper writes:
 - the generated search index to `~/.local/share/technical-implementation-troubleshooter/search.sqlite`;
 - local path configuration to `~/.config/technical-implementation-troubleshooter/config.json`.
 
-It preserves unrelated keys in an existing configuration and replaces only `private_reference_roots` and `private_search_indexes`. The update is atomic. Use `--dry-run` to print the planned roots and paths without building or writing anything.
+It preserves unrelated keys in an existing configuration and replaces only
+`private_reference_roots`, `private_document_manifests`, and
+`private_search_indexes`. The update is atomic. Use `--dry-run` to print the
+planned roots and paths without building or writing anything.
+
+Document manifests passed as `--document-manifest LABEL=PATH` are stored as
+`private_document_manifests` and reused on later self-rebuilds. If you
+explicitly replace the root list, pass the applicable document manifests again;
+the helper clears stale manifest mappings rather than applying them to a new
+root accidentally.
 
 The helper stores labeled root objects so citations remain stable across rebuilds. It can activate immutable bundle roots with repeated `--bundle` arguments and the named repositories with `--technical-implementation-repo`, `--ansible-repo`, `--vendor-reference-repo`, `--wiki-repo`, `--md-code-red-repo`, and `--md-code-red-ref`. It uses the corresponding environment variables when a flag is absent. Use `--skip-index` to update repository settings without rebuilding a source corpus.
 
@@ -77,6 +86,12 @@ The configuration file contains paths and non-secret policy selectors only:
   ],
   "private_corpus_bundles": [
     "/absolute/private/path/bundles/2026-10-04"
+  ],
+  "private_document_manifests": [
+    {
+      "label": "vendor",
+      "path": "/absolute/private/path/manifests/vendor-documents.json"
+    }
   ],
   "private_search_indexes": [
     "/absolute/private/path/bundles/2026-10-04/indexes/search.sqlite"

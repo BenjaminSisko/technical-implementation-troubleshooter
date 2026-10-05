@@ -29,3 +29,7 @@ support-bundles/
 host-captures/
 license.dat
 *.receipt.json
+*.approval.json
+*.documents.json
+*.sanitization.json
+private-manifests/
