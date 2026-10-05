@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:technical-implementation-troubleshooter:vendor-manifest:v1",
+  "title": "Air-Gapped Vendor Reference Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "bundle_id", "generated_at", "documents"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "bundle_id": {"type": "string", "minLength": 1},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "review_reference": {"type": ["string", "null"]},
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "vendor", "product", "title", "source_url", "retrieved_at", "status"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"},
+          "vendor": {"type": "string", "minLength": 1},
+          "product": {"type": "string", "minLength": 1},
+          "title": {"type": "string", "minLength": 1},
+          "document_type": {"type": ["string", "null"]},
+          "version": {"type": ["string", "null"]},
+          "platform": {"type": ["string", "null"]},
+          "source_url": {"type": "string", "pattern": "^https://"},
+          "published_at": {"type": ["string", "null"]},
+          "retrieved_at": {"type": "string", "format": "date-time"},
+          "status": {"enum": ["candidate", "active", "superseded"]},
+          "superseded_by": {"type": ["string", "null"]},
+          "handling_note": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Technical Implementation Troubleshooter"
+  short_description: "Private-corpus, evidence-led infrastructure troubleshooting"
+  default_prompt: "Use $technical-implementation-troubleshooter to investigate this ticket, search the approved private vendor corpus and environment record, cite version-specific evidence, and update the technical record."

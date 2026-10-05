@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "technical_implementation_repo": "/absolute/path/to/Technical Implementation",
+  "ansible_repo": "/absolute/path/to/ansible-repository",
+  "vendor_reference_repo": "/absolute/path/to/vendor-reference-repository",
+  "wiki_repo": "/absolute/path/to/wiki-repository",
+  "md_code_red_repo": "/absolute/path/to/md-code-red",
+  "md_code_red_ref": "refs/tags/v1.0.0",
+  "private_reference_roots": [
+    "/absolute/private/path/environment-overlay",
+    "/absolute/private/path/vendor-extracts"
+  ],
+  "private_corpus_bundles": [
+    "/absolute/private/path/bundles/YYYY-MM-DD"
+  ],
+  "private_search_indexes": [
+    "/absolute/private/path/bundles/YYYY-MM-DD/indexes/search.sqlite"
+  ],
+  "wiki_publish_command": null,
+  "default_ticket_area": null
+}
